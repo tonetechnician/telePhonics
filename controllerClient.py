@@ -1,27 +1,23 @@
 #!/usr/bin/env python
 
-"""controlledStreamer.py: stream packets over OSC"""
+"""controllerClient.py: simple OSC controller"""
 
 """
-Open a PCAP and send out OSC for sound production.
+Allows user to send controll messages
 
-Usage: $python controlledStreamer.py [-i IP] [-p PORT] [--no-control] input_pcap
-
-positional arguments:
-  input_pcap            PCAP input file.
+Usage: $python controllerClient.py [-h] [-i IP] [-p PORT]
 
 optional arguments:
   -h, --help            show this help message and exit
   -i IP, --ip IP        The ip to listen on. Default: 127.0.0.1
   -p PORT, --port PORT  The port to listen on. Default: 5005
-  --no-control          Turn off control server.
 """
 
 __author__ = "Brent Shaw"
 __copyright__ = "Copyright 2018"
 __credits__ = ["Brent Shaw"]
 __license__ = "GPL"
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 __maintainer__ = "Brent Shaw"
 __email__ = "shaw@live.co.za"
 __status__ = "Development"

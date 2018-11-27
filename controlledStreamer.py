@@ -21,7 +21,7 @@ __author__ = "Brent Shaw"
 __copyright__ = "Copyright 2018"
 __credits__ = ["Brent Shaw"]
 __license__ = "GPL"
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 __maintainer__ = "Brent Shaw"
 __email__ = "shaw@live.co.za"
 __status__ = "Development"
@@ -39,6 +39,8 @@ from pythonosc import osc_message_builder
 from pythonosc import udp_client
 from dpkt.compat import compat_ord
 from multiprocessing import Process, Value, Queue
+
+# Packet data functions
 
 def mac_addr(address):
     """Convert a MAC address to a readable/printable string
@@ -61,6 +63,9 @@ def inet_to_str(inet):
         return socket.inet_ntop(socket.AF_INET, inet)
     except ValueError:
         return socket.inet_ntop(socket.AF_INET6, inet)
+
+# Streamer object for PCAP
+# Eventually this will be replaced with Scrubbable object 
 
 class PacketStreamer(object):
     def __init__(self, f):
@@ -112,10 +117,13 @@ def process_PCAP(cap, ip, port, command_queue, start_state):
 
     command = ["playback", "pause"]
 
+    # Set up GeoIP database
     reader = geoip2.database.Reader('geoip/GeoLite2-City.mmdb')
 
+    # Start OSC client (sender)
     client = udp_client.UDPClient(ip, port)
 
+    # Create packetstrewam object
     packetStream = PacketStreamer(cap)
 
     last = None
@@ -125,6 +133,7 @@ def process_PCAP(cap, ip, port, command_queue, start_state):
 
         # This is not pretty, but it works
         
+        # Check Queue for new control commands
         if command_queue.empty() is False:
             command = command_queue.get().split("/") # Separate the command and value
         if command[0] == "playback":
@@ -135,6 +144,7 @@ def process_PCAP(cap, ip, port, command_queue, start_state):
         if command[0] == "scale":
             scale = float(command[1])
 
+        # If not in a play state, then wait, checking for commands
         while not state:
             if command_queue.empty() is False:
                 command = command_queue.get().split("/") # Separate the command and value
@@ -147,7 +157,7 @@ def process_PCAP(cap, ip, port, command_queue, start_state):
                     scale = float(command[1])
             time.sleep(0.1)
             pass
-        
+
         timestamp = packet[0]
         buf = packet[1]
 
@@ -156,6 +166,7 @@ def process_PCAP(cap, ip, port, command_queue, start_state):
         else:
             delay = timestamp-last
 
+            # Scale the wait time
             time.sleep(delay/scale)
             try:
 
@@ -181,6 +192,7 @@ def process_PCAP(cap, ip, port, command_queue, start_state):
                 #TODO: Finish this. Is not currently used
                 adsr = sourceip.replace(".", " ")
 
+                # OSC commands for Synthesiser
                 msg = osc_message_builder.OscMessageBuilder(address="/adsr")
                 msg.add_arg(adsr)
                 msg = msg.build()
