@@ -38,6 +38,7 @@ from pythonosc import osc_server
 from pythonosc import osc_message_builder
 from pythonosc import udp_client
 from dpkt.compat import compat_ord
+# import multiprocessing as mp
 from multiprocessing import Process, Value, Queue
 
 # Packet data functions
@@ -85,6 +86,15 @@ class PacketStreamer(object):
             for timestamp, buffer in pcap:
                 yield (timestamp, buffer)
 
+    # def __getstate__(self):
+    #     self_dict = self.__dict__
+    #     del self_dict['logger']
+    #     return self_dict
+
+    # def __setstate__(self, d):
+    #     self.__dict__.update(d)
+    #     self.open_logger()
+
 # OSC Message handlers
 # These are called upon receival of each OSC message type
 # Queue messaging format
@@ -121,7 +131,8 @@ def process_PCAP(cap, ip, port, command_queue, start_state):
     reader = geoip2.database.Reader('geoip/GeoLite2-City.mmdb')
 
     # Start OSC client (sender)
-    client = udp_client.UDPClient(ip, port)
+    client = udp_client.UDPClient(ip, port) 
+    client2 = udp_client.UDPClient(ip, 7401) 
 
     # Create packetstrewam object
     packetStream = PacketStreamer(cap)
@@ -130,7 +141,7 @@ def process_PCAP(cap, ip, port, command_queue, start_state):
 
     # For each packet in the pcap process the contents
     for packet in packetStream:
-
+        # print(packet)
         # This is not pretty, but it works
         
         # Check Queue for new control commands
@@ -155,6 +166,7 @@ def process_PCAP(cap, ip, port, command_queue, start_state):
                         state = False
                 if command[0] == "scale":
                     scale = float(command[1])
+                    # print(command[1])
             time.sleep(0.1)
             pass
 
@@ -165,7 +177,8 @@ def process_PCAP(cap, ip, port, command_queue, start_state):
             last = timestamp
         else:
             delay = timestamp-last
-
+            if delay < 0:
+                delay = 1
             # Scale the wait time
             time.sleep(delay/scale)
             try:
@@ -182,12 +195,19 @@ def process_PCAP(cap, ip, port, command_queue, start_state):
                 destip = inet_to_str(ip.dst)
 
                 #geo data
-                response = reader.city(sourceip)
-                iso = response.country.iso_code
-                lat = response.location.latitude
-                lon = response.location.longitude
+                try :
+                    # print(ip.data.port)
+                    response = reader.city(sourceip)
+                    iso = response.country.iso_code
+                    lat = response.location.latitude
+                    lon = response.location.longitude
+                except Exception as e :
+                    # print(e)
+                    iso = "noCountry"
+                    lat = 0
+                    lon = 0
+                    pass
                 print("Timestamp: " + str(timestamp) + ", ISO: " +iso+" - Latitude: "+str(lat)+", Longitude: "+str(lon) + ", Delayed: " + str(delay))
-
                 #build ADSR curve
                 #TODO: Finish this. Is not currently used
                 adsr = sourceip.replace(".", " ")
@@ -197,16 +217,22 @@ def process_PCAP(cap, ip, port, command_queue, start_state):
                 msg.add_arg(adsr)
                 msg = msg.build()
                 client.send(msg)
+                
 
                 msg = osc_message_builder.OscMessageBuilder(address="/country")
                 msg.add_arg(iso)
                 msg = msg.build()
                 client.send(msg)
 
+                # print(ip.data.port)
                 msg = osc_message_builder.OscMessageBuilder(address="/freq")
+                # if ip.data.port != 
+                    
+                # else
                 msg.add_arg(ip.data.dport)
                 msg = msg.build()
                 client.send(msg)
+                client2.send(msg)
 
                 msg = osc_message_builder.OscMessageBuilder(address="/delay")
                 msg.add_arg(ip.p)
@@ -217,19 +243,22 @@ def process_PCAP(cap, ip, port, command_queue, start_state):
                 msg.add_arg(lat)
                 msg = msg.build()
                 client.send(msg)
+                client2.send(msg)
 
                 msg = osc_message_builder.OscMessageBuilder(address="/lon")
                 msg.add_arg(lon)
                 msg = msg.build()
                 client.send(msg)
+                client2.send(msg)
 
                 last = timestamp
 
             except Exception as e:
-                #print(e)
+                print(e)
                 pass
 
 if __name__ == '__main__':
+    # set_start_method('spawn')
     # Arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("input_pcap",
@@ -262,5 +291,6 @@ if __name__ == '__main__':
     print("Listening on {}".format(threading_server.server_address))
 
     # Start processes
+
     Process(target=process_OSC, args=(command_queue,threading_server)).start()
     Process(target=process_PCAP, args=(args.input_pcap, args.ip, args.port, command_queue,start_state)).start()
